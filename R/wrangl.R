@@ -4,11 +4,11 @@ library(sf)
 ##
 
 zones <- st_read("data/oz.shp") %>% st_drop_geometry()
-tract <- st_read("data/tracts.shp")
+tracts <- st_read("data/tracts.shp")
 
 ##
 
-zones <- left_join(tract, zones)
+zones <- left_join(tracts, zones)
 
 ##
 
@@ -140,6 +140,62 @@ g +
            label = "21% without") +
   ggsave("opportunity.png", height = 6, width = 8, dpi = 300)
 
+##
+
+g <- 
+  ggplot(comparisons %>%
+           mutate(zone = factor(zone)) %>%
+           filter(variable == "Household_Income_rP_gP_p25") %>%
+           mutate(range = ntile(value, 100)) %>%
+           filter(range != 100 & range != 1 & !is.na(range)),
+         aes(x = zone, y = value, color = zone)) +
+  labs(x = NULL, y = "median income, parents in bottom 25%") +
+  coord_flip() +
+  scale_color_brewer(palette = 'Set1',
+                     guide = 'none') +
+  theme_rot()
+
+g +
+  geom_jitter(size = 0.25, alpha = 0.25, show.legend = FALSE) +
+  stat_summary(fun.y = mean, geom = "point", size = 3.3, colour = 'gray70') +
+  geom_segment(aes(x = zone, 
+                   xend = zone,
+                   y = nat_avg, 
+                   yend = zone_avg),
+               size = 0.9, colour = 'gray70') +
+  stat_summary(fun.y = mean, geom = "point", size = 3) +
+  geom_segment(aes(x = zone, 
+                   xend = zone,
+                   y = nat_avg, 
+                   yend = zone_avg),
+               size = 0.8) +
+  geom_hline(aes(yintercept = nat_avg), color = "gray70", size = 0.75) +
+  annotate("text", x = factor(1), y = 45000, size = 5, color = "gray20",
+           label = "those growing up in lowest quartile\nearn $28 thousand on average\nwithin opportunity zones") +
+  annotate("text", x = factor(0), y = 45000, size = 5, color = "gray20",
+           label = "$34 thousand without") +
+  ggsave("ep.png", height = 6, width = 8, dpi = 300)
+
+##
+
+library(tidycensus)
+
+##
+
+us <- unique(fips_codes$state)[1:51]
+
+value2012 <- map_df(us, function(x) {
+  get_acs(geography = "tract", variables = "B25077_001", 
+          state = x, year = 2012)
+})
+
+value2016 <- map_df(us, function(x) {
+  get_acs(geography = "tract", variables = "B25077_001", 
+          state = x, year = 2016)
+})
+
+##
+
 ## Triming outliers and cleaning up the data for plotting
 
 toydata <-
@@ -176,5 +232,22 @@ ggplot(toydata %>%
   theme_rot() +
   ggsave("aggregate.png", height = 8, width = 8, dpi = 300)
 
+##
 
-  
+before <- 
+  read_csv("data/homevalue_2012.csv") %>%
+  transmute(GEOID = GEOID, 
+            year_2012 = estimate)
+after <- 
+  read_csv("data/homevalue_2016.csv") %>%
+  transmute(GEOID = GEOID, 
+            year_2016 = estimate)
+
+##
+
+comparisons %>%
+  filter(variable == "Household_Income_rP_gP_p25") %>%
+  left_join(before) %>%
+  left_join(after) %>%
+  mutate(change = year_2016 - year_2012)
+
